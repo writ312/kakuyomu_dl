@@ -74,8 +74,8 @@ def main():
     book.add_author(author)
 
     # CSSスタイルを定義し、ブックに追加
-    
-    style = open('default.css','r')
+
+    style = open("default.css", "r")
     defualt_css = epub.EpubItem(
         uid="style_default",
         file_name="style/default.css",
@@ -119,7 +119,7 @@ def main():
 
     print("Set TOC ...... OK\n")
     # スピンドルのオプション
-    book.spine = ["nav"]
+    book.spine = [{"toc": "ncx", "page-progression-direction": "rtl"}]
     book.spine += book_items
 
     # EPUBファイルを保存
