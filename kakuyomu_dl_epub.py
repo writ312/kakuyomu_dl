@@ -28,22 +28,21 @@ def get_base_info(url):
     soup = BeautifulSoup(data.text, "html.parser")
 
     # タイトルを抽出
-    title = soup.find("h1", id="workTitle").a.text
+    og_title = soup.find("meta",property="og:title").attrs["content"]
+    
+    match = re.match(r"(.+)（(.+)） - カクヨム", og_title)
 
-    # 作者を抽出
-    author = (
-        soup.find("h2", id="workAuthor")
-        .find("span", id="workAuthor-activityName")
-        .a.text
-    )
+    if match:
+        title = match.group(1) 
+        author = match.group(2)
 
-    urls = soup.select("li.widget-toc-episode > a")
-    lst = [f"https://kakuyomu.jp{u.get('href')}" for u in urls]
-    return (title, author, lst)
+    first_episode_url = f"https://kakuyomu.jp{soup.select('a.WorkTocSection_link__ocg9K')[0].get('href')}"
+
+    return (title, author, first_episode_url)
 
 
 # get_chapter_urlsで取得したChapterにアクセスしてテキストを取ってきてPDFに変換
-def get_episode_contents(url, file_name_start):
+def get_episode_contents(url):
     print(f"get {url} ......")
     data = requests.get(url)
     soup = BeautifulSoup(data.text, "html.parser")
@@ -55,14 +54,19 @@ def get_episode_contents(url, file_name_start):
     content = str(content_list_fillter)[1:-1]
     content = content.replace(">,", ">")
     print("OK \n")
-
-    return (episodeTitle, content)
+    
+    next_episode_element = soup.select("a#contentMain-readNextEpisode")
+    if (len(next_episode_element) == 1) :
+        next_url = f"https://kakuyomu.jp{soup.select('a#contentMain-readNextEpisode')[0].get('href')}"
+    else :
+        next_url = None
+    return (episodeTitle, content, next_url)
 
 
 def main():
     # 新しいEPUBブックを作成
     book = epub.EpubBook()
-    (title, author, urls) = get_base_info(input("URL >> "))
+    (title, author, first_episode_url) = get_base_info(input("URL >> "))
 
     print("Create EPUB\n")
     # メタデータをセット
@@ -75,7 +79,7 @@ def main():
 
     # CSSスタイルを定義し、ブックに追加
 
-    style = open("default.css", "r")
+    style = open("default.css", "r",encoding="utf8")
     defualt_css = epub.EpubItem(
         uid="style_default",
         file_name="style/default.css",
@@ -89,9 +93,12 @@ def main():
     print("Set Metadata ...... OK\n")
 
     book_items = []
-    for idx, url in enumerate(urls, 1):
+
+    (episodeTitle, content, next_url) = get_episode_contents(first_episode_url)
+    idx = 0
+
+    while next_url is not None :
         name_initial = str(idx).zfill(3)
-        (episodeTitle, content) = get_episode_contents(url, name_initial)
         page = epub.EpubHtml(
             title=episodeTitle, file_name=f"chap_{name_initial}.xhtml", lang="ja"
         )
@@ -99,7 +106,11 @@ def main():
         page.content = formatContetns
         page.add_item(defualt_css)
         book_items.append(page)
-        # 連続してアクセスしないように1s間とる
+
+        idx += 1
+        (episodeTitle, content, next_url) = get_episode_contents(next_url)
+
+        # 連続してアクセスしないように3s間とる
         if idx % 10 == 0:
             time.sleep(3)
 
@@ -119,14 +130,14 @@ def main():
 
     print("Set TOC ...... OK\n")
     # スピンドルのオプション
-    book.spine = [{"toc": "ncx", "page-progression-direction": "rtl"}]
+    book.spine = ["toc:ncx,page-progression-direction:rtl","nav"]
     book.spine += book_items
 
     # EPUBファイルを保存
     print("Finish Create EPUB\n")
     print(f"Export to  {title}-{author}.epub ...... ")
 
-    epub.write_epub(f"{title}-{author}.epub", book, {})
+    epub.write_epub(name = f"{title}-{author}.epub",book =  book)
     print("OK\n")
 
 
