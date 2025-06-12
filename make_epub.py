@@ -76,7 +76,7 @@ def main_kakuyomu(url) :
     book.set_identifier(f"{title}_{author}")
     book.set_title(title)
     book.set_language("jp")
-
+    book.set_direction("rtl")
     # 作者情報
     book.add_author(author)
 
@@ -133,7 +133,7 @@ def main_kakuyomu(url) :
 
     print("Set TOC ...... OK\n")
     # スピンドルのオプション
-    book.spine = ["toc:ncx,page-progression-direction:rtl","nav"]
+    book.spine = ["nav"]
     book.spine += book_items
 
     # EPUBファイルを保存
@@ -181,7 +181,7 @@ def main_narou(url):
     book.set_identifier(f"{title}_{author}")
     book.set_title(title)
     book.set_language("jp")
-
+    book.set_direction("rtl")
     # 作者情報
     book.add_author(author)
 
@@ -201,30 +201,33 @@ def main_narou(url):
     print("Set Metadata ...... OK\n")
 
     book_items = []
+    maegaki_separater = "********************************************"
+    atogaki_separater = "************************************************"
+    #re.split(r'\*{44,48}', data.text)
 
-    separater = "************************************************"
+
+    #splitlines()
     for idx, episodeTitle in enumerate(titles,1) :
-        data = session.get(f"https://ncode.syosetu.com/txtdownload/dlstart/ncode/{ncode}/?no={idx}&hankaku=0&code=utf-8&kaigyo=crlf",headers=headers)
+        contents = session.get(f"https://ncode.syosetu.com/txtdownload/dlstart/ncode/{ncode}/?no={idx}&hankaku=0&code=utf-8&kaigyo=crlf",headers=headers).text
         print(f"get Chapter {idx} ... OK")
         
-        content = "<p>" + data.text.replace("\r\n\r\n","</p><br/><br/><p>")
+        maegaki = ""
+        atogaki = ""
+
+        if atogaki_separater in contents :
+            (contents, atogaki) = contents.split(atogaki_separater)
+            atogaki = '<div class="maegaki">' + "".join(f"<p>{item}</p>" for item in atogaki.splitlines()) + '</div>'
+
+        if maegaki_separater in contents :
+            (contents,maegaki) = contents.split(maegaki_separater)      
+            maegaki = '<div class="maegaki">' + "".join(f"<p>{item}</p>" for item in maegaki.splitlines()) + '</div>'
+
+        contents = "".join(f"<p>{item}</p>" for item in contents.splitlines())
         
-        matches = [match.start() for match in re.finditer(separater.replace("*","\*"), content)]
-        if len(matches) == 2 :
-            content = '<div class="maegaki">' + content.replace(separater,'</div>',1)
-            content = content.replace(separater,'<div class="maegaki">') + '</div>'
-        elif len(matches) == 1 :
-            if matches[0] < (len(content) // 2) : 
-                content = '<div class="maegaki">' + content.replace(separater,'</div>')
-            else :
-                content = content.replace(separater,'<div class="maegaki">') + '</div>'
-        
-        name_initial = str(idx).zfill(3)
         page = epub.EpubHtml(
-            title=episodeTitle, file_name=f"chap_{name_initial}.xhtml", lang="ja"
+            title=episodeTitle, file_name=f"chap_{str(idx).zfill(3)}.xhtml", lang="ja"
         )
-        formatContetns = f"<h1>{episodeTitle}</h1>{content}"
-        page.content = formatContetns
+        page.content = f"<h1>{episodeTitle}</h1>{maegaki}{contents}{atogaki}"
         page.add_item(defualt_css)
         book_items.append(page)
 
@@ -248,7 +251,7 @@ def main_narou(url):
 
     print("Set TOC ...... OK\n")
     # スピンドルのオプション
-    book.spine = ["toc:ncx,page-progression-direction:rtl","nav"]
+    book.spine = ["nav"]
     book.spine += book_items
 
     # EPUBファイルを保存
