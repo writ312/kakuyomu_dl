@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup
 import requests
 import time
 import re
+import regex
 
 from ebooklib import epub
 
@@ -211,6 +212,21 @@ def main_narou(url):
         contents = session.get(f"https://ncode.syosetu.com/txtdownload/dlstart/ncode/{ncode}/?no={idx}&hankaku=0&code=utf-8&kaigyo=crlf",headers=headers).text
         print(f"get Chapter {idx} ... OK")
         
+            # 明示的ルビ（｜漢字《読み》）
+        contents = regex.sub(r'[｜|](\S+?)《(.*?)》', r'<ruby>\1<rt>\2</rt></ruby>', contents)
+
+        # 暗黙的ルビ（漢字《読み》）
+        contents = regex.sub(r'(\p{Han}+?)《(.*?)》', r'<ruby>\1<rt>\2</rt></ruby>', contents)
+
+        # 簡易ルビ（漢字(読み)） ※｜(読み) は除外
+        contents = regex.sub(r'(?<![｜|])(\p{Han}+?)（(.+?)）', r'<ruby>\1<rt>\2</rt></ruby>', contents)
+
+        # ルビ除外(｜（）)のパイプを削除
+        contents = regex.sub(r'｜（', r'（', contents)
+
+        #　挿絵の削除
+        contents = regex.sub(r'<i.*?\|.*?>.*\n', '', contents)
+
         maegaki = ""
         atogaki = ""
 
@@ -219,9 +235,9 @@ def main_narou(url):
             atogaki = '<div class="maegaki">' + "".join(f"<p>{item}</p>" for item in atogaki.splitlines()) + '</div>'
 
         if maegaki_separater in contents :
-            (contents,maegaki) = contents.split(maegaki_separater)      
+            (maegaki,contents) = contents.split(maegaki_separater)      
             maegaki = '<div class="maegaki">' + "".join(f"<p>{item}</p>" for item in maegaki.splitlines()) + '</div>'
-
+            
         contents = "".join(f"<p>{item}</p>" for item in contents.splitlines())
         
         page = epub.EpubHtml(
